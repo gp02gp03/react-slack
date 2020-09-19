@@ -18,7 +18,10 @@ function Register() {
     password: "",
     passwordConfirmation: "",
     errors: [],
+    loading: false,
   });
+
+  const database = firebase.database();
 
   const handleChange = (e) => {
     setState({
@@ -30,42 +33,49 @@ function Register() {
   const isFormValid = () => {
     let errors = [];
     let error;
-    const username = form.username.toString();
-    const email = form.email.toString();
-    const password = form.password.toString();
-    const passwordConfirmation = form.passwordConfirmation.toString();
+    let result = false;
     if (
-      isFormEmpty(
+      !isFormEmpty(
         form.username,
         form.email,
         form.password,
         form.passwordConfirmation
       )
     ) {
-      errors = { message: "please fill in all fields" };
-      setState({ errors: form.errors.concat(error) });
-      return false;
+      error = { message: "please fill in all fields" };
+      setState({ ...form, errors: errors.concat(error) });
+      result = false;
     } else if (!isPasswordValid(form.password, form.passwordConfirmation)) {
-      errors = { message: "Password is invalid" };
-      setState({ errors: form.errors.concat(error) });
-      return false;
+      error = { message: "Password is invalid" };
+      setState(...form, { errors: errors.concat(error) });
+      result = false;
     } else {
+      result = true;
     }
+    return result;
   };
 
   const isFormEmpty = (username, email, password, passwordConfirmation) => {
-    return (
-      !username.length ||
-      !email.length ||
-      !password.length ||
-      !passwordConfirmation.length
-    );
+    let isFormEmpty = false;
+    if (
+      username === "" ||
+      email === "" ||
+      password === "" ||
+      passwordConfirmation === ""
+    ) {
+      isFormEmpty = false;
+    } else {
+      isFormEmpty = true;
+    }
+    return isFormEmpty;
   };
 
   const isPasswordValid = (password, passwordConfirmation) => {
-    if (password.length < 6 || passwordConfirmation.length < 6) {
+    let isPassWord = password || [];
+    let isPassWordConfirmation = passwordConfirmation || [];
+    if (isPassWord.length < 6 || isPassWordConfirmation.length < 6) {
       return false;
-    } else if (password !== passwordConfirmation) {
+    } else if (isPassWord !== isPassWordConfirmation) {
       return false;
     } else {
       return true;
@@ -73,30 +83,49 @@ function Register() {
   };
 
   const displayError = (error) => {
-    error.map((err, idx) => {
-      <p key={idx}>{error.message}</p>;
+    const displayError = error || [];
+    return displayError.map((element, index) => {
+      return <p key={index}>{element.message}</p>;
     });
   };
   const handleSubmit = (e) => {
-    if (
-      isFormEmpty(
-        form.username,
-        form.email,
-        form.password,
-        form.passwordConfirmation
-      )
-    ) {
-      e.preventDefault();
+    e.preventDefault();
+    if (isFormValid()) {
+      setState(...form, { errors: [], loading: true });
       firebase
         .auth()
         .createUserWithEmailAndPassword(form.email, form.password)
         .then((createUser) => {
           console.log(createUser);
+          setState(...form, { errors: [], loading: false });
+
+          let date = new Date();
+          let now = date.getTime();
+          database
+            .ref(createUser.uid)
+            .set({
+              signup: now,
+              email: form.email,
+            })
+            .then(() => {});
         })
         .catch((err) => {
-          console.err(err);
+          console.log(err);
+          setState(...form, {
+            errors: form.errors.concat(err),
+            loading: false,
+          });
         });
     }
+  };
+
+  const handleInputError = (errors, inputName) => {
+    let inputError = errors || [];
+    return inputError.some((error) =>
+      error.message.toLowerCase().includes(inputName)
+    )
+      ? "error"
+      : "";
   };
 
   return (
@@ -132,6 +161,7 @@ function Register() {
               onChange={handleChange}
               value={form.email}
               type="email"
+              className={handleInputError(form.errors, "email")}
             />
             <Form.Input
               fluid
@@ -142,6 +172,7 @@ function Register() {
               onChange={handleChange}
               value={form.password}
               type="password"
+              className={handleInputError(form.errors, "password")}
             />
             <Form.Input
               fluid
@@ -152,22 +183,29 @@ function Register() {
               onChange={handleChange}
               value={form.passwordConfirmation}
               type="password"
+              className={handleInputError(form.errors, "password")}
             />
-            <Button color="blue" fluid size="large">
+            <Button
+              disabled={form.loading}
+              className={form.loading ? "loading" : ""}
+              color="blue"
+              fluid
+              size="large"
+            >
               Submit
             </Button>
-            {form.errors.length > 0 && (
-              <Message error>
-                <h3>Error</h3>
-                {displayError(form.errors)}
-              </Message>
-            )}
-            <Message>
-              Already a user?
-              <Link to="/login">Login</Link>
-            </Message>
           </Segment>
         </Form>
+        {form.errors.length > 0 && (
+          <Message error>
+            <h3>Error</h3>
+            {displayError(form.errors)}
+          </Message>
+        )}
+        <Message>
+          Already a user?
+          <Link to="/login">Login</Link>
+        </Message>
       </Grid.Column>
     </Grid>
   );
